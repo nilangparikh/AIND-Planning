@@ -338,25 +338,13 @@ class PlanningGraph():
         #   may be "added" to the set without fear of duplication.  However, it is important to then correctly create and connect
         #   all of the new S nodes as children of all the A nodes that could produce them, and likewise add the A nodes to the
         #   parent sets of the S nodes
-        newset = set()
-        for pos_literal in self.fs.pos:
-            new_pos_literal_node = PgNode_s(pos_literal, True)
-            newset.add(new_pos_literal_node)
-            for action_node in self.a_levels[level - 1]:
-                if new_pos_literal_node in action_node.effnodes:
-                    action_node.children.add(new_pos_literal_node)
-                    new_pos_literal_node.parents.add(action_node)
-        self.s_levels.append(newset)
-
-        newset = set()
-        for neg_literal in self.fs.neg:
-            new_neg_literal_node = PgNode_s(neg_literal, False)
-            newset.add(new_neg_literal_node)
-            for action_node in self.a_levels[level - 1]:
-                if new_neg_literal_node in action_node.effnodes:
-                    action_node.children.add(new_neg_literal_node)
-                    new_neg_literal_node.parents.add(action_node)
-        self.s_levels.append(newset)
+        self.s_levels.append(set())
+        for action_node in self.a_levels[level - 1]:
+            for state_node in action_node.effnodes:
+                if state_node.symbol:
+                    self.s_levels[level].add(state_node)
+                    action_node.children.add(state_node)
+                    state_node.parents.add(action_node)
 
     def update_a_mutex(self, nodeset):
         """ Determine and update sibling mutual exclusion for A-level nodes
@@ -510,7 +498,9 @@ class PlanningGraph():
         :return: bool
         """
         # TODO test for negation between nodes
-        if not node_s1.__eq__(node_s2):
+        is_same_symbol = node_s1.symbol == node_s2.symbol
+        is_negation = node_s1.is_pos != node_s2.is_pos
+        if is_same_symbol and is_negation:
             return True
 
         return False
@@ -534,10 +524,10 @@ class PlanningGraph():
         # TODO test for Inconsistent Support between nodes
         for p1 in node_s1.parents:
             for p2 in node_s2.parents:
-                if p1.is_mutex(p2):
-                    return True
+                if (not p1.is_mutex(p2) and not p2.is_mutex(p1)):
+                    return False
 
-        return False
+        return True
 
     def h_levelsum(self) -> int:
         """The sum of the level costs of the individual goals (admissible if goals independent)
